@@ -24,12 +24,9 @@ public:
 
 
     void loop() {
-        if (timer.tick()) {
-            shut_down();
-        }
-
-        CLI();
+        set_relay(!timer.tick());
         led_blink();
+        CLI();
         delay(sleep_time_ms);
     }
 
@@ -46,7 +43,6 @@ public:
             serial_cli.println("  help - Show this help message");
             serial_cli.println("  status - Show current status");
             serial_cli.println("  reset - Reset the timer");
-            serial_cli.println("  shutdown - Shut down the system");
             serial_cli.println("  <count> - Set the timer count (in seconds)");
         };
 
@@ -67,9 +63,6 @@ public:
             params.save();
             serial_cli.printf("Count changed: %u -> %u.\n", old_count, new_count);
 
-        } else if (input == "shutdown") {
-            shut_down();
-
         } else {
             serial_cli.println("Unknown command.");
             print_help();
@@ -86,7 +79,6 @@ public:
         }
     }
         
-
     void reset_timer() {
         timer.reset();
     }
@@ -123,15 +115,9 @@ private:
         attachInterrupt(digitalPinToInterrupt(GPIO_BUTTON), interrupt_handler, FALLING);
     }
 
-    void shut_down() {
-        serial_cli.println("Gooodbye!");
-        digitalWrite(GPIO_RELAY_1, LOW);
-        digitalWrite(GPIO_RELAY_2, LOW);
-
-        // This line will be never reached.
-        while(true) {
-            delay(1000);
-        }
+    void set_relay(bool on) {
+        digitalWrite(GPIO_RELAY_1, on ? HIGH : LOW);
+        digitalWrite(GPIO_RELAY_2, on ? HIGH : LOW);
     }
 
     static constexpr unsigned int frequency = 10U; // Hz
