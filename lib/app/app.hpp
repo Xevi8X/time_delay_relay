@@ -15,14 +15,23 @@ public:
 
     void setup() {
         setup_gpio();
+        set_power_relay(true);
         params.init();
         statistics.init();
         const auto& p = params.get();
         timer.set_init_count(p.count * p.frequency);
         sleep_time_ms = 1000U / p.frequency;
         serial_cli.begin(115200);
-    }
 
+        delay(p.boot_delay_ms);
+
+        if (!is_button_pressed()) {
+            set_power_relay(false);
+        }
+        else {
+            set_output_relay(true);
+        }
+    }
 
     void loop() {
         if (was_button_pressed) {
@@ -31,7 +40,13 @@ public:
             timer.reset();
         }
 
-        set_relay(!timer.tick());
+        auto res = timer.tick();
+
+        if (res) {
+            set_output_relay(false);
+            set_power_relay(false);
+        }
+
         led_blink();
         CLI();
         delay(sleep_time_ms);
@@ -67,7 +82,7 @@ public:
             statistics.reset();
             serial_cli.println("Statistics reset.");
 
-        } else if (input.toInt() > 10) {
+        } else if (input.toInt() >= 300 && input.toInt() <= 3600) {
             unsigned int new_count = input.toInt();
             unsigned int old_count = params.get().count;
             params.get().count = new_count;
@@ -81,7 +96,7 @@ public:
     }
 
     void led_blink() {
-        constexpr auto start_end_time = 5U;
+        constexpr auto start_end_time = 2U;
 
         const auto& p = params.get();
         const auto count = timer.get_count();
@@ -90,7 +105,7 @@ public:
             set_led(true);
         
         } else if (timer.get_init_count() -  count < p.frequency * start_end_time) {
-            set_led(false);
+            set_led(true);
         }
         else {
             set_led(count % p.frequency == 0);
@@ -120,24 +135,24 @@ private:
         pinMode(GPIO_RELAY_1, OUTPUT);
         pinMode(GPIO_RELAY_2, OUTPUT);
         pinMode(GPIO_LED, OUTPUT);
-
-        // Keep the power on.
-        digitalWrite(GPIO_RELAY_1, HIGH);
-        // Turn on device.
-        digitalWrite(GPIO_RELAY_2, HIGH);
-
         pinMode(GPIO_BUTTON, INPUT_PULLUP);
-
         attachInterrupt(digitalPinToInterrupt(GPIO_BUTTON), interrupt_handler, FALLING);
     }
 
-    void set_relay(bool on) {
-        digitalWrite(GPIO_RELAY_1, on ? HIGH : LOW);
+    void set_power_relay(bool on) {
         digitalWrite(GPIO_RELAY_2, on ? HIGH : LOW);
+    }
+
+    void set_output_relay(bool on) {
+        digitalWrite(GPIO_RELAY_1, on ? HIGH : LOW);
     }
 
     void set_led(bool on) {
         digitalWrite(GPIO_LED, on ? LOW : HIGH);
+    }
+
+    bool is_button_pressed() const {
+        return digitalRead(GPIO_BUTTON) == LOW;
     }
 };
 

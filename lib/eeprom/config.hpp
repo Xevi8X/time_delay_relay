@@ -4,14 +4,14 @@
 #include <EEPROM.h>
 
 #define PARAMETER_OFFSET 0
-#define STATISTICS_OFFSET 512
+#define STATISTICS_OFFSET 64
 
 static EEPROMClass& get_eeprom() {
     static EEPROMClass eeprom;
     static bool init = false;
 
     if (!init) {
-        eeprom.begin(1024); // Initialize EEPROM with 1KB size
+        eeprom.begin(STATISTICS_OFFSET * 2);
         init = true;
     }
 
