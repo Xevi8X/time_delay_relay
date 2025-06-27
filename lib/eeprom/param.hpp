@@ -1,7 +1,6 @@
 #pragma once
 
-#include <cstdint>
-#include <EEPROM.h>
+#include "config.hpp"
 
 struct ParameterData {
     uint8_t version = 1;
@@ -12,12 +11,18 @@ struct ParameterData {
 class Parameter {
 public:
 
+    Parameter() : eeprom(get_eeprom()) {}
+
     void init() {
-        eeprom.begin(sizeof(ParameterData));
         if (eeprom.read(0) != data.version) {
             save();
         }
         eeprom.get(0, data);
+        
+        // sanity check
+        if (data.frequency == 0U) {
+            data.frequency = 10U; // default frequency
+        }
     }
 
     void save() {
@@ -31,5 +36,5 @@ public:
 
 private:
     ParameterData data;
-    EEPROMClass eeprom;
+    EEPROMClass& eeprom;
 };

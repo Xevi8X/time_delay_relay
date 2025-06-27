@@ -1,6 +1,6 @@
 #pragma once
 
-#include <param.hpp>
+#include <eeprom.hpp>
 #include <timer.hpp>
 
 #include "board.hpp"
@@ -16,14 +16,21 @@ public:
     void setup() {
         setup_gpio();
         params.init();
+        statistics.init();
         const auto& p = params.get();
-        timer.set(p.count * p.frequency);
+        timer.set_init_count(p.count * p.frequency);
         sleep_time_ms = 1000U / p.frequency;
         serial_cli.begin(115200);
     }
 
 
     void loop() {
+        if (was_button_pressed) {
+            was_button_pressed = false;
+            statistics.bump_reset_button_count();
+            timer.reset();
+        }
+
         set_relay(!timer.tick());
         led_blink();
         CLI();
@@ -42,7 +49,7 @@ public:
             serial_cli.println("Usage:");
             serial_cli.println("  help - Show this help message");
             serial_cli.println("  status - Show current status");
-            serial_cli.println("  reset - Reset the timer");
+            serial_cli.println("  reset - Reset the statistics");
             serial_cli.println("  <count> - Set the timer count (in seconds)");
         };
 
@@ -50,11 +57,15 @@ public:
             print_help();
 
         } else if (input == "status") {
-            serial_cli.printf("Timer count: %u\n", timer.get_count());
+            const auto& s = statistics.get();
+            serial_cli.printf("Timer count:        %u\n", timer.get_count());
+            serial_cli.printf("Initial count:      %u\n", timer.get_init_count());
+            serial_cli.printf("Boot count:         %llu\n", s.boot_count);
+            serial_cli.printf("Reset button count: %llu\n", s.reset_button_count);
 
         } else if (input == "reset") {
-            timer.reset();
-            serial_cli.println("Timer reset.");
+            statistics.reset();
+            serial_cli.println("Statistics reset.");
 
         } else if (input.toInt() > 10) {
             unsigned int new_count = input.toInt();
@@ -70,17 +81,20 @@ public:
     }
 
     void led_blink() {
+        constexpr auto start_end_time = 5U;
+
+        const auto& p = params.get();
         const auto count = timer.get_count();
 
-        if (count % frequency == 0) {
-            digitalWrite(GPIO_LED, LOW);
-        } else {
-            digitalWrite(GPIO_LED, HIGH);
-        }
-    }
+        if (count < p.frequency * start_end_time) {
+            set_led(true);
         
-    void reset_timer() {
-        timer.reset();
+        } else if (timer.get_init_count() -  count < p.frequency * start_end_time) {
+            set_led(false);
+        }
+        else {
+            set_led(count % p.frequency == 0);
+        }
     }
 
     static App* app_instance;
@@ -90,15 +104,17 @@ public:
     }
 
     static void IRAM_ATTR interrupt_handler() {
-        instance()->reset_timer();
+        instance()->was_button_pressed = true;
     }
 
 private:
     Parameter params;
+    Statistic statistics;
     Timer timer;
-    unsigned int sleep_time_ms = 0;
 
     HardwareSerial serial_cli = HardwareSerial(0);
+    unsigned int sleep_time_ms = 0;
+    bool was_button_pressed = false;
 
     void setup_gpio() {
         pinMode(GPIO_RELAY_1, OUTPUT);
@@ -120,8 +136,9 @@ private:
         digitalWrite(GPIO_RELAY_2, on ? HIGH : LOW);
     }
 
-    static constexpr unsigned int frequency = 10U; // Hz
-
+    void set_led(bool on) {
+        digitalWrite(GPIO_LED, on ? LOW : HIGH);
+    }
 };
 
 App* App::app_instance = nullptr;

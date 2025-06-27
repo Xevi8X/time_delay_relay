@@ -16,9 +16,13 @@ public:
         count = init_count;
     }
 
-    void set(unsigned int ticks) {
+    void set_init_count(unsigned int ticks) {
         init_count = ticks;
         reset();
+    }
+
+    unsigned int get_init_count() const {
+        return init_count;
     }
 
     unsigned int get_count() const {
@@ -27,6 +31,5 @@ public:
 
 private:
     unsigned int count = 0U;
-
     unsigned int init_count = 0U;
 };
